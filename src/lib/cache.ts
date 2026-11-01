@@ -17,7 +17,9 @@ export class CacheService {
           return JSON.parse(cached) as T;
         } catch {
           // Treat malformed or outdated cache values as misses.
-          await redis.del(key);
+          void redis.del(key).catch((error) => {
+            console.warn("[Cache] Redis delete failed:", getErrorMessage(error));
+          });
         }
       }
     } catch (error) {
@@ -30,10 +32,13 @@ export class CacheService {
     try {
       const serialized = JSON.stringify(freshData);
       if (serialized !== undefined) {
-        await redis.set(key, serialized, "EX", ttlSeconds);
+        // Cache writes are best-effort and must not delay a successful database response.
+        void redis.set(key, serialized, "EX", ttlSeconds).catch((error) => {
+          console.warn("[Cache] Redis write failed:", getErrorMessage(error));
+        });
       }
     } catch (error) {
-      console.warn("[Cache] Redis write failed:", getErrorMessage(error));
+      console.warn("[Cache] Redis serialization failed:", getErrorMessage(error));
     }
 
     return freshData;

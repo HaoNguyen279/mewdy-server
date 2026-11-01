@@ -4,6 +4,7 @@ import { AuthRepository } from "./auth.repository.js";
 import { FirebaseService } from "../../services/firebase.service.js";
 import { invalidateAuthUserCache } from "../../middlewares/authenticate.js";
 import type { LoginInput, RegisterInput } from "./auth.validation.js";
+import { getTrustedProviderEmail } from "./trusted-provider-email.js";
 
 export class AuthError extends Error {
   constructor(public statusCode: number, message: string) {
@@ -14,9 +15,12 @@ export class AuthError extends Error {
 
 export class AuthService {
   private readonly googleClient = new OAuth2Client();
-  private readonly firebaseService = new FirebaseService();
 
-  constructor(private readonly authRepository: AuthRepository) {}
+  constructor(
+    private readonly authRepository: AuthRepository,
+    private readonly firebaseService = new FirebaseService(),
+    private readonly invalidateUserCache: () => Promise<void> = invalidateAuthUserCache,
+  ) {}
 
   async register(input: RegisterInput) {
     const email = input.email?.trim().toLowerCase() ?? null;
@@ -31,7 +35,7 @@ export class AuthService {
 
     try {
       const user = await this.authRepository.createPasswordUser(email, phone, hashPassword(input.password));
-      await invalidateAuthUserCache();
+      await this.invalidateUserCache();
       return { user };
     } catch (error) {
       if (this.isUniqueConstraintError(error)) {
@@ -81,9 +85,7 @@ export class AuthService {
     }
 
     const googleSub = payload.sub;
-    const email = payload.email_verified && payload.email
-      ? payload.email.trim().toLowerCase()
-      : null;
+    const email = getTrustedProviderEmail(payload.email, payload.email_verified);
 
     const existingUser = await this.authRepository.findByGoogleSub(googleSub);
     if (existingUser) {
@@ -92,14 +94,14 @@ export class AuthService {
       }
 
       return {
-        user: await this.authRepository.recordSignIn(existingUser.id),
+        user: await this.authRepository.recordSignIn(existingUser.id, email),
         isNewUser: false,
       };
     }
 
     try {
-      const user = await this.authRepository.createGoogleUser(googleSub, email);
-      await invalidateAuthUserCache();
+      const user = await this.authRepository.createGoogleUser(googleSub, email, Boolean(email));
+      await this.invalidateUserCache();
       return { user, isNewUser: true };
     } catch (error) {
       // A concurrent first sign-in may have inserted this Google sub after our lookup.
@@ -109,8 +111,8 @@ export class AuthService {
       // identity keyed by sub instead of silently linking it to an account by email.
       if (!userCreatedByConcurrentRequest && email && this.isUniqueConstraintError(error)) {
         try {
-          const user = await this.authRepository.createGoogleUser(googleSub, null);
-          await invalidateAuthUserCache();
+          const user = await this.authRepository.createGoogleUser(googleSub, null, false);
+          await this.invalidateUserCache();
           return { user, isNewUser: true };
         } catch (retryError) {
           userCreatedByConcurrentRequest = await this.authRepository.findByGoogleSub(googleSub);
@@ -127,7 +129,7 @@ export class AuthService {
       }
 
       return {
-        user: await this.authRepository.recordSignIn(userCreatedByConcurrentRequest.id),
+        user: await this.authRepository.recordSignIn(userCreatedByConcurrentRequest.id, email),
         isNewUser: false,
       };
     }
@@ -153,9 +155,16 @@ export class AuthService {
     }
 
     const firebaseUid = decodedToken.uid;
-    const email = decodedToken.email_verified && decodedToken.email
-      ? decodedToken.email.trim().toLowerCase()
-      : null;
+    let firebaseUser;
+    try {
+      // ID token claims can be stale after a user verifies their email. Read the current
+      // Firebase Auth record so PostgreSQL mirrors Firebase's authoritative state.
+      firebaseUser = await this.firebaseService.getUser(firebaseUid);
+    } catch {
+      throw new AuthError(401, "Firebase account could not be loaded");
+    }
+    const email = firebaseUser.email?.trim().toLowerCase() || null;
+    const emailVerified = Boolean(email && firebaseUser.emailVerified);
 
     const existingUser = await this.authRepository.findByFirebaseUid(firebaseUid);
     if (existingUser) {
@@ -163,29 +172,31 @@ export class AuthService {
         throw new AuthError(403, "This account is not active");
       }
 
+      const user = await this.authRepository.recordFirebaseSignIn(existingUser.id, email, emailVerified);
+      if (!user) throw new AuthError(404, "Firebase account is not linked to a dating account");
       return {
-        user: await this.authRepository.recordSignIn(existingUser.id),
+        user,
         isNewUser: false,
       };
     }
 
     try {
-      const user = await this.authRepository.createFirebaseUser(firebaseUid, email);
-      await invalidateAuthUserCache();
+      const user = await this.authRepository.createFirebaseUser(firebaseUid, email, emailVerified);
+      await this.invalidateUserCache();
       return { user, isNewUser: true };
     } catch (error) {
       // A concurrent first sign-in may have inserted this Firebase UID after our lookup.
-      let userCreatedByConcurrentRequest = await this.authRepository.findByFirebaseUid(firebaseUid);
+      let userCreatedByConcurrentRequest = await this.authRepository.findByFirebaseUidFromDatabase(firebaseUid);
 
       // The database may enforce unique emails for existing password accounts. Keep Firebase
       // identity keyed by UID instead of silently linking it to an account by email.
       if (!userCreatedByConcurrentRequest && email && this.isUniqueConstraintError(error)) {
         try {
-          const user = await this.authRepository.createFirebaseUser(firebaseUid, null);
-          await invalidateAuthUserCache();
+          const user = await this.authRepository.createFirebaseUser(firebaseUid, null, emailVerified);
+          await this.invalidateUserCache();
           return { user, isNewUser: true };
         } catch (retryError) {
-          userCreatedByConcurrentRequest = await this.authRepository.findByFirebaseUid(firebaseUid);
+          userCreatedByConcurrentRequest = await this.authRepository.findByFirebaseUidFromDatabase(firebaseUid);
           if (!userCreatedByConcurrentRequest) {
             throw retryError;
           }
@@ -198,8 +209,14 @@ export class AuthService {
         throw new AuthError(403, "This account is not active");
       }
 
+      const user = await this.authRepository.recordFirebaseSignIn(
+        userCreatedByConcurrentRequest.id,
+        email,
+        emailVerified,
+      );
+      if (!user) throw new AuthError(404, "Firebase account is not linked to a dating account");
       return {
-        user: await this.authRepository.recordSignIn(userCreatedByConcurrentRequest.id),
+        user,
         isNewUser: false,
       };
     }

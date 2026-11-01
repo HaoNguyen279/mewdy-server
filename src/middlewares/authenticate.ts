@@ -4,6 +4,7 @@ import prisma from "../lib/prisma.js";
 const authUserSelect = {
   id: true,
   email: true,
+  email_verified: true,
   phone: true,
   status: true,
   firebase_uid: true,

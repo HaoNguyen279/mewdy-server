@@ -7,7 +7,7 @@
     "dev": "tsx watch src/app.ts",
     "seed": "tsx src/seed.ts",
     "seed:demo-users": "tsx src/seed-demo-users.ts",
-    "test": "tsx --test src/modules/recommendations/recommendation-rules.test.ts src/modules/recommendations/recommendation-scoring.test.ts src/modules/recommendations/recommendations.service.test.ts src/modules/recommendations/recommendations.repository.integration.test.ts",
+    "test": "tsx --test src/modules/recommendations/recommendation-rules.test.ts src/modules/recommendations/recommendation-scoring.test.ts src/modules/recommendations/recommendations.service.test.ts src/modules/recommendations/recommendations.repository.integration.test.ts src/modules/auth/firebase-email-verification.test.ts src/modules/auth/trusted-provider-email.test.ts",
     "start": "node dist/app.js",
     "build": "tsc",
     "postinstall": "prisma skills sync || exit 0"

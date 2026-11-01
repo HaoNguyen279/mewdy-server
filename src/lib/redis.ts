@@ -10,6 +10,9 @@ const redisUrl = process.env.REDIS_URL?.trim() || "redis://localhost:6379";
 export const redis = new Redis(redisUrl, {
   lazyConnect: true,
   connectTimeout: 1_000,
+  // A TCP connection can be established while the Redis server/proxy stops replying.
+  // Bound every command so optional cache operations cannot hold HTTP requests forever.
+  commandTimeout: 500,
   maxRetriesPerRequest: 1,
   enableOfflineQueue: true,
   retryStrategy(times) {
@@ -18,7 +21,11 @@ export const redis = new Redis(redisUrl, {
 });
 
 redis.on("connect", () => {
-  console.info("[Redis] Connected");
+  console.info("[Redis] TCP connection established");
+});
+
+redis.on("ready", () => {
+  console.info("[Redis] Ready to accept commands");
 });
 
 redis.on("error", (error) => {

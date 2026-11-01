@@ -43,7 +43,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgrepassword}@postgres:5432/${POSTGRES_DB:-datingdb}?schema=public
       DIRECT_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgrepassword}@postgres:5432/${POSTGRES_DB:-datingdb}?schema=public
-    command: ["pnpm", "exec", "prisma", "db", "push", "--accept-data-loss"]
+    command: ["pnpm", "exec", "tsx", "src/scripts/migrate-database.ts"]
     depends_on:
       postgres:
         condition: service_healthy

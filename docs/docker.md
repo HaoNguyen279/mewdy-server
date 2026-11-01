@@ -25,6 +25,6 @@ docker compose down
 
 `docker compose down` keeps database data. To remove the database and Redis data too, run `docker compose down -v` (this deletes the persisted data).
 
-The migration service runs `prisma migrate deploy` before the API starts. To apply new migrations, rebuild/recreate the stack with `docker compose up --build -d`.
+The migration service runs `src/scripts/migrate-database.ts` before the API starts. It applies migrations to an existing schema and bootstraps a new empty local database without accepting data loss. To apply new migrations, rebuild/recreate the stack with `docker compose up --build -d`.
 
 Set `API_PORT`, `POSTGRES_PORT`, or `REDIS_PORT` in `.env` to change host ports. The API listens on port 3000 inside its container.

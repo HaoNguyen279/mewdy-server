@@ -4,6 +4,7 @@ import type { user_status } from "../../generated/prisma/enums.js";
 export const userSafeSelect = {
   id: true,
   email: true,
+  email_verified: true,
   phone: true,
   status: true,
   last_active_at: true,
@@ -14,6 +15,7 @@ export const userSafeSelect = {
 export interface SafeUser {
   id: string;
   email: string | null;
+  email_verified: boolean;
   phone: string | null;
   status: user_status;
   last_active_at: Date | null;
@@ -52,6 +54,7 @@ export class UsersRepository {
         email: data.email ?? null,
         phone: data.phone ?? null,
         password_hash: data.password_hash ?? null,
+        email_verified: false,
         status: data.status ?? "active",
       },
       select: userSafeSelect,
@@ -133,6 +136,7 @@ export class UsersRepository {
       where: { id },
       data: {
         ...data,
+        ...(data.email !== undefined ? { email_verified: false } : {}),
         updated_at: new Date(),
       },
       select: userSafeSelect,

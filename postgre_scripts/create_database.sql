@@ -33,6 +33,7 @@ $$ LANGUAGE plpgsql;
 CREATE TABLE users (
     id              uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
     email           varchar(255),
+    email_verified   boolean      NOT NULL DEFAULT false,
     google_sub      varchar(255),
     firebase_uid    varchar(255),
     phone           varchar(20),
@@ -50,6 +51,15 @@ CREATE TABLE users (
     CONSTRAINT users_phone_format
         CHECK (phone IS NULL OR phone ~ '^\+?[0-9]{8,15}$')
 );
+
+CREATE TABLE email_verification_tokens (
+    user_id    uuid        PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    token_hash char(64)    NOT NULL UNIQUE,
+    expires_at timestamptz NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX email_verification_tokens_expiry_idx ON email_verification_tokens (expires_at);
 
 -- Email không phân biệt hoa thường; phone unique (NULL được phép lặp)
 CREATE UNIQUE INDEX users_email_uq ON users (lower(email));

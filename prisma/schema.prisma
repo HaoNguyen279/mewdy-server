@@ -200,6 +200,7 @@ model swipes {
 model users {
   id                              String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   email                           String?                        @db.VarChar(255)
+  email_verified                  Boolean                        @default(false)
   google_sub                      String?                        @unique(map: "users_google_sub_uq") @db.VarChar(255)
   firebase_uid                    String?                        @unique(map: "users_firebase_uid_uq") @db.VarChar(255)
   phone                           String?                        @unique(map: "users_phone_uq") @db.VarChar(20)
@@ -218,9 +219,20 @@ model users {
   discovery_group_members         discovery_group_members[]
   swipes_swipes_swiped_idTousers  swipes[]                       @relation("swipes_swiped_idTousers")
   swipes_swipes_swiper_idTousers  swipes[]                       @relation("swipes_swiper_idTousers")
+  email_verification_token        email_verification_tokens?
 
   @@index([last_active_at(sort: Desc)], map: "users_last_active_idx")
   @@index([status])
+}
+
+model email_verification_tokens {
+  user_id    String   @id @db.Uuid
+  token_hash String   @unique(map: "email_verification_tokens_hash_uq") @db.Char(64)
+  expires_at DateTime @db.Timestamptz(6)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  users      users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([expires_at], map: "email_verification_tokens_expiry_idx")
 }
 
 enum gender_type {
