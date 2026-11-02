@@ -1,0 +1,26 @@
+prometheus.scrape "dating_server_api" {
+  targets = [
+    {
+      "__address__" = sys.env("METRICS_SCRAPE_TARGET"),
+      "job"         = "dating-server",
+    },
+  ]
+
+  scrape_interval = "15s"
+  forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+prometheus.remote_write "grafana_cloud" {
+  external_labels = {
+    ec2_instance = sys.env("METRICS_INSTANCE_NAME"),
+  }
+
+  endpoint {
+    url = sys.env("GRAFANA_CLOUD_PROMETHEUS_URL")
+
+    basic_auth {
+      username = sys.env("GRAFANA_CLOUD_PROMETHEUS_USERNAME")
+      password = sys.env("GRAFANA_CLOUD_API_TOKEN")
+    }
+  }
+}

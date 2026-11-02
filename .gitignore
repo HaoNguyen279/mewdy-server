@@ -52,6 +52,7 @@ logs/
 !.env.example
 !.env.sample
 !.env.template
+!.env.grafana.example
 
 # Temporary files
 .cache/
