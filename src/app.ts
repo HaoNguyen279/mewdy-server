@@ -13,7 +13,7 @@ import chatRouter from "./modules/chat/chat.routes.js";
 import discoveryGroupsRouter from "./modules/discovery-groups/discovery-groups.routes.js";
 import { notFoundHandler } from "./middlewares/not-found.js";
 import { errorHandler } from "./middlewares/error-handler.js";
-
+import { register, metricsMiddleware } from "./observability/metrics.js";
 const app = express();
 
 app.use(cors);
@@ -28,6 +28,8 @@ app.get("/", (_req, res) => {
     message: "Dating App API is running",
   });
 });
+
+app.use(metricsMiddleware);
 
 app.use("/api/profiles", profilesRouter);
 app.use("/api/swipes", swipesRouter);
@@ -48,3 +50,10 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
 });
+
+const metricsApp = express();
+metricsApp.get("/metrics", async (_req, res) => {
+  res.set("Content-Type", register.contentType);
+  res.end(await register.metrics());
+});
+metricsApp.listen(9464, () => console.log("Metrics at http://localhost:9464/metrics"))

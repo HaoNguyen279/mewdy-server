@@ -3,7 +3,7 @@ import { invalidateUserMatchesCache } from "../matches/matches.service.js";
 import { invalidateUserRecommendationsCache } from "../recommendations/recommendations.service.js";
 import { SwipesRepository, type SwipeResult } from "./swipes.repository.js";
 import type { CreateSwipeInput, ListSwipesQuery } from "./swipes.validation.js";
-
+import { swipesTotal, matchesTotal } from "../../observability/metrics.js";
 export class SwipesHttpError extends Error {
   constructor(public readonly statusCode: number, message: string) {
     super(message);
@@ -38,6 +38,13 @@ export class SwipesService {
       input.swiped_id,
       input.action as swipe_action
     );
+
+     swipesTotal.inc({ direction: input.action });
+
+    // 3. Monitor tổng số match
+    if (result.isMatch) {
+      matchesTotal.inc();
+    }
     const invalidations = [invalidateUserRecommendationsCache(input.swiper_id)];
     if (result.isMatch) {
       invalidations.push(

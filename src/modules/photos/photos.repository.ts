@@ -16,24 +16,6 @@ export class PhotoOrderError extends Error {
 }
 
 export class PhotosRepository {
-  private async stagePhotoPositions(
-    tx: Prisma.TransactionClient,
-    photos: Array<{ id: string; position: number }>,
-  ) {
-    const occupiedPositions = new Set(photos.map((photo) => photo.position));
-    let temporaryPosition = -1;
-
-    for (const photo of photos) {
-      while (occupiedPositions.has(temporaryPosition)) temporaryPosition -= 1;
-      await tx.photos.update({
-        where: { id: photo.id },
-        data: { position: temporaryPosition },
-      });
-      occupiedPositions.add(temporaryPosition);
-      temporaryPosition -= 1;
-    }
-  }
-
   listForUser(userId: string) {
     return prisma.photos.findMany({
       where: { user_id: userId },
@@ -94,13 +76,12 @@ export class PhotosRepository {
         throw new PhotoOrderError();
       }
 
+      await tx.$executeRawUnsafe("SET CONSTRAINTS photos_user_position_uq DEFERRED;");
+
       await tx.photos.updateMany({
         where: { user_id: userId },
         data: { is_primary: false },
       });
-      // Move rows to unused positions first so this works with an immediate
-      // unique index as well as with a deferrable constraint.
-      await this.stagePhotoPositions(tx, photos);
       for (const [position, id] of orderedPhotoIds.entries()) {
         await tx.photos.update({
           where: { id },
@@ -126,12 +107,13 @@ export class PhotosRepository {
       if (!deletedPhoto) return null;
 
       const remaining = photos.filter((photo) => photo.id !== photoId);
+      await tx.$executeRawUnsafe("SET CONSTRAINTS photos_user_position_uq DEFERRED;");
+
       await tx.photos.updateMany({
         where: { user_id: userId },
         data: { is_primary: false },
       });
       await tx.photos.delete({ where: { id: photoId } });
-      await this.stagePhotoPositions(tx, remaining);
       for (const [position, photo] of remaining.entries()) {
         await tx.photos.update({
           where: { id: photo.id },
