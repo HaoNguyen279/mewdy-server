@@ -91,15 +91,11 @@ export class SwipesService {
     const limit = Math.min(100, Math.max(1, query?.limit ?? 20));
     const skip = (page - 1) * limit;
 
-    const [data, total] = await Promise.all([
-      this.swipesRepo.getUserSwipedMe(userId, {
-        skip,
-        take: limit,
-        action: query?.action as swipe_action | undefined,
-        sortOrder: query?.sortOrder ?? "desc",
-      }),
-      this.swipesRepo.countSwipedMe(userId, query?.action as swipe_action | undefined),
-    ]);
+    const { data, total } = await this.swipesRepo.getUserSwipedMe(userId, {
+      skip,
+      take: limit,
+      sortOrder: query?.sortOrder ?? "desc",
+    });
 
     return {
       data,

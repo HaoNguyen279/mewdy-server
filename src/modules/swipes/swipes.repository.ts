@@ -204,40 +204,52 @@ export class SwipesRepository {
 
   async getUserSwipedMe(
     userId: string,
-    options: { skip: number; take: number; action?: swipe_action; sortOrder?: "asc" | "desc" }
+    options: { skip: number; take: number; sortOrder?: "asc" | "desc" }
   ) {
-    const where: {
-      swiped_id: string;
-      action?: swipe_action;
-    } = {
+    const [outgoingSwipes, activeMatches] = await Promise.all([
+      prisma.swipes.findMany({
+        where: { swiper_id: userId },
+        select: { swiped_id: true },
+      }),
+      prisma.matches.findMany({
+        where: {
+          status: "active",
+          OR: [{ user1_id: userId }, { user2_id: userId }],
+        },
+        select: { user1_id: true, user2_id: true },
+      }),
+    ]);
+
+    const excludedUserIds = new Set<string>([
+      ...outgoingSwipes.map((swipe) => swipe.swiped_id),
+      ...activeMatches.map((match) =>
+        match.user1_id === userId ? match.user2_id : match.user1_id
+      ),
+    ]);
+
+    const where = {
       swiped_id: userId,
+      action: { in: ["like", "super_like"] as swipe_action[] },
+      swiper_id: { notIn: [...excludedUserIds] },
     };
 
-    if (options.action) {
-      where.action = options.action;
-    }
-
-    return prisma.swipes.findMany({
-      where,
-      skip: options.skip,
-      take: options.take,
-      orderBy: {
-        created_at: options.sortOrder ?? "desc",
-      },
-      include: {
-        users_swipes_swiper_idTousers: {
-          select: safeUserSelect,
+    const [data, total] = await Promise.all([
+      prisma.swipes.findMany({
+        where,
+        skip: options.skip,
+        take: options.take,
+        orderBy: {
+          created_at: options.sortOrder ?? "desc",
         },
-      },
-    });
-  }
+        include: {
+          users_swipes_swiper_idTousers: {
+            select: safeUserSelect,
+          },
+        },
+      }),
+      prisma.swipes.count({ where }),
+    ]);
 
-  async countSwipedMe(userId: string, action?: swipe_action): Promise<number> {
-    return prisma.swipes.count({
-      where: {
-        swiped_id: userId,
-        ...(action && { action }),
-      },
-    });
+    return { data, total };
   }
 }
