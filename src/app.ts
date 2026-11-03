@@ -11,6 +11,7 @@ import recommendationsRouter from "./modules/recommendations/recommendations.rou
 import authRouter from "./modules/auth/auth.routes.js";
 import chatRouter from "./modules/chat/chat.routes.js";
 import discoveryGroupsRouter from "./modules/discovery-groups/discovery-groups.routes.js";
+import aiRouter from "./modules/ai/ai.routes.js";
 import { notFoundHandler } from "./middlewares/not-found.js";
 import { errorHandler } from "./middlewares/error-handler.js";
 import { register, metricsMiddleware } from "./observability/metrics.js";
@@ -40,6 +41,7 @@ app.use("/api/matches", matchesRouter);
 app.use("/api/chat", chatRouter);
 app.use("/api/recommendations", recommendationsRouter);
 app.use("/api/discovery-groups", discoveryGroupsRouter);
+app.use("/api/ai", aiRouter);
 app.use("/auth", authRouter);
 
 app.use(notFoundHandler);
